@@ -58,9 +58,10 @@ class GameEngine:
         self.target_score = 5
         self.match_over = False
 
+        # Position the restart button above the choice buttons.
         self.restart_rect = pygame.Rect(
             self.width // 2 - 75,
-            self.height - 75,
+            self.height // 2 + 70,
             150,
             45,
         )
@@ -94,11 +95,11 @@ class GameEngine:
         return rules.get((player, cpu), "TIE")
 
     def get_cpu_choice(self):
-        # Use random choices until at least three moves are recorded.
+        # Play randomly until at least three moves are recorded.
         if len(self.player_history) < 3:
             return random.choice(self.choices)
 
-        # Examine the player's last ten choices.
+        # Look at the player's last ten choices.
         recent_choices = self.player_history[-10:]
 
         most_common = max(
@@ -106,6 +107,7 @@ class GameEngine:
             key=recent_choices.count,
         )
 
+        # Choose the move that beats the most common player choice.
         counters = {
             "ROCK": "PAPER",
             "PAPER": "SCISSORS",
@@ -115,7 +117,7 @@ class GameEngine:
         return counters[most_common]
 
     def play_round(self, choice):
-        # Start the countdown; resolve the round after it finishes.
+        # Start the countdown before resolving the round.
         self.pending_choice = choice
         self.countdown_active = True
         self.countdown_start_time = pygame.time.get_ticks()
