@@ -1,3 +1,4 @@
+
 import random
 import pygame
 from game.button import ChoiceButton
@@ -9,6 +10,7 @@ class GameEngine:
         self.height = height
 
         self.choices = ["ROCK", "PAPER", "SCISSORS"]
+        self.player_history = []
 
         btn_w, btn_h = 130, 50
         gap = 20
@@ -25,7 +27,9 @@ class GameEngine:
             ),
             ChoiceButton(
                 "PAPER",
-                pygame.Rect(start_x + btn_w + gap, btn_y, btn_w, btn_h),
+                pygame.Rect(
+                    start_x + btn_w + gap, btn_y, btn_w, btn_h
+                ),
                 (40, 100, 170),
                 (60, 130, 210),
             ),
@@ -50,10 +54,9 @@ class GameEngine:
 
         self.player_score = 0
         self.cpu_score = 0
-
-        # First-to-five match settings
         self.target_score = 5
         self.match_over = False
+
         self.restart_rect = pygame.Rect(
             self.width // 2 - 75,
             self.height - 75,
@@ -84,9 +87,32 @@ class GameEngine:
 
         return rules.get((player, cpu), "TIE")
 
+    def get_cpu_choice(self):
+        # Play randomly until enough player choices are recorded.
+        if len(self.player_history) < 3:
+            return random.choice(self.choices)
+
+        # Consider the player's last 10 choices.
+        recent_choices = self.player_history[-10:]
+
+        most_common = max(
+            self.choices,
+            key=recent_choices.count,
+        )
+
+        # Choose the move that beats the player's most common move.
+        counters = {
+            "ROCK": "PAPER",
+            "PAPER": "SCISSORS",
+            "SCISSORS": "ROCK",
+        }
+
+        return counters[most_common]
+
     def play_round(self, choice):
         self.player_choice = choice
-        self.cpu_choice = random.choice(self.choices)
+        self.player_history.append(choice)
+        self.cpu_choice = self.get_cpu_choice()
 
         outcome = self.determine_winner(
             self.player_choice,
@@ -115,7 +141,7 @@ class GameEngine:
             )
             self.result_color = (240, 210, 80)
 
-        # Check whether either side has won the match
+        # Check whether either side has won the match.
         if self.player_score >= self.target_score:
             self.match_over = True
             self.result_text = "YOU WON THE MATCH!"
@@ -131,21 +157,23 @@ class GameEngine:
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-
-            # After the match, only allow restarting
             if self.match_over:
                 if self.restart_rect.collidepoint(event.pos):
                     self.player_score = 0
                     self.cpu_score = 0
+                    self.player_history = []
+
                     self.player_choice = None
                     self.cpu_choice = None
+
                     self.result_text = "Make your move!"
-                    self.result_color = (220, 225, 235)
+                    self.result_color = (190, 195, 205)
+
                     self.match_over = False
                     self.showing_result = False
+
                 return
 
-            # Accept a move only when the previous result is hidden
             if not self.showing_result:
                 for btn in self.buttons:
                     if btn.contains(event.pos):
@@ -158,10 +186,12 @@ class GameEngine:
         if (
             self.showing_result
             and not self.match_over
-            and now - self.round_resolved_time >= self.display_duration
+            and now - self.round_resolved_time
+            >= self.display_duration
         ):
             self.player_choice = None
             self.cpu_choice = None
+
             self.result_text = "Make your move!"
             self.result_color = (190, 195, 205)
             self.showing_result = False
@@ -207,16 +237,18 @@ class GameEngine:
             2,
         )
 
-        player_text = self.player_choice if self.player_choice else "--"
+        player_text = (
+            self.player_choice if self.player_choice else "--"
+        )
         cpu_text = self.cpu_choice if self.cpu_choice else "--"
 
         player_pick_surf = self.font_arena.render(
-            f"Your Pick:  {player_text}",
+            f"Your Pick: {player_text}",
             True,
             (225, 225, 230),
         )
         cpu_pick_surf = self.font_arena.render(
-            f"CPU Pick:  {cpu_text}",
+            f"CPU Pick: {cpu_text}",
             True,
             (225, 225, 230),
         )
@@ -252,7 +284,7 @@ class GameEngine:
         for btn in self.buttons:
             btn.render(screen)
 
-        # Display restart button when the match ends
+        # Display the restart button after the match ends.
         if self.match_over:
             pygame.draw.rect(
                 screen,
@@ -266,6 +298,7 @@ class GameEngine:
                 True,
                 (255, 255, 255),
             )
+
             screen.blit(
                 restart_text,
                 (
