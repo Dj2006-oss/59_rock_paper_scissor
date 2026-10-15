@@ -48,6 +48,7 @@ class GameEngine:
 
         self.player_choice = None
         self.cpu_choice = None
+        self.pending_choice = None
 
         self.result_text = "Make your move!"
         self.result_color = (220, 225, 235)
@@ -68,9 +69,14 @@ class GameEngine:
         self.display_duration = 1800
         self.showing_result = False
 
+        self.countdown_active = False
+        self.countdown_start_time = 0
+        self.countdown_duration = 2000
+
         self.font_title = pygame.font.SysFont(None, 36)
         self.font_hud = pygame.font.SysFont(None, 26)
         self.font_arena = pygame.font.SysFont(None, 32)
+        self.font_countdown = pygame.font.SysFont(None, 80)
 
     def determine_winner(self, player, cpu):
         if player == cpu:
@@ -88,11 +94,11 @@ class GameEngine:
         return rules.get((player, cpu), "TIE")
 
     def get_cpu_choice(self):
-        # Play randomly until enough player choices are recorded.
+        # Use random choices until at least three moves are recorded.
         if len(self.player_history) < 3:
             return random.choice(self.choices)
 
-        # Consider the player's last 10 choices.
+        # Examine the player's last ten choices.
         recent_choices = self.player_history[-10:]
 
         most_common = max(
@@ -100,7 +106,6 @@ class GameEngine:
             key=recent_choices.count,
         )
 
-        # Choose the move that beats the player's most common move.
         counters = {
             "ROCK": "PAPER",
             "PAPER": "SCISSORS",
@@ -110,8 +115,15 @@ class GameEngine:
         return counters[most_common]
 
     def play_round(self, choice):
-        self.player_choice = choice
-        self.player_history.append(choice)
+        # Start the countdown; resolve the round after it finishes.
+        self.pending_choice = choice
+        self.countdown_active = True
+        self.countdown_start_time = pygame.time.get_ticks()
+        self.showing_result = True
+
+    def finish_round(self):
+        self.player_choice = self.pending_choice
+        self.player_history.append(self.player_choice)
         self.cpu_choice = self.get_cpu_choice()
 
         outcome = self.determine_winner(
@@ -141,7 +153,6 @@ class GameEngine:
             )
             self.result_color = (240, 210, 80)
 
-        # Check whether either side has won the match.
         if self.player_score >= self.target_score:
             self.match_over = True
             self.result_text = "YOU WON THE MATCH!"
@@ -152,6 +163,8 @@ class GameEngine:
             self.result_text = "CPU WON THE MATCH!"
             self.result_color = (240, 80, 80)
 
+        self.countdown_active = False
+        self.pending_choice = None
         self.showing_result = True
         self.round_resolved_time = pygame.time.get_ticks()
 
@@ -165,16 +178,18 @@ class GameEngine:
 
                     self.player_choice = None
                     self.cpu_choice = None
+                    self.pending_choice = None
 
                     self.result_text = "Make your move!"
                     self.result_color = (190, 195, 205)
 
                     self.match_over = False
                     self.showing_result = False
+                    self.countdown_active = False
 
                 return
 
-            if not self.showing_result:
+            if not self.showing_result and not self.countdown_active:
                 for btn in self.buttons:
                     if btn.contains(event.pos):
                         self.play_round(btn.choice_name)
@@ -182,6 +197,14 @@ class GameEngine:
 
     def update(self):
         now = pygame.time.get_ticks()
+
+        if self.countdown_active:
+            if (
+                now - self.countdown_start_time
+                >= self.countdown_duration
+            ):
+                self.finish_round()
+            return
 
         if (
             self.showing_result
@@ -191,7 +214,6 @@ class GameEngine:
         ):
             self.player_choice = None
             self.cpu_choice = None
-
             self.result_text = "Make your move!"
             self.result_color = (190, 195, 205)
             self.showing_result = False
@@ -268,23 +290,41 @@ class GameEngine:
             ),
         )
 
-        result_surf = self.font_arena.render(
-            self.result_text,
-            True,
-            self.result_color,
-        )
-        screen.blit(
-            result_surf,
-            (
-                self.width // 2 - result_surf.get_width() // 2,
-                205,
-            ),
-        )
+        if self.countdown_active:
+            elapsed = (
+                pygame.time.get_ticks() - self.countdown_start_time
+            )
+            countdown_number = max(1, 3 - int(elapsed / 650))
+
+            countdown_surf = self.font_countdown.render(
+                str(countdown_number),
+                True,
+                (255, 210, 80),
+            )
+            screen.blit(
+                countdown_surf,
+                (
+                    self.width // 2 - countdown_surf.get_width() // 2,
+                    205,
+                ),
+            )
+        else:
+            result_surf = self.font_arena.render(
+                self.result_text,
+                True,
+                self.result_color,
+            )
+            screen.blit(
+                result_surf,
+                (
+                    self.width // 2 - result_surf.get_width() // 2,
+                    205,
+                ),
+            )
 
         for btn in self.buttons:
             btn.render(screen)
 
-        # Display the restart button after the match ends.
         if self.match_over:
             pygame.draw.rect(
                 screen,
@@ -298,7 +338,6 @@ class GameEngine:
                 True,
                 (255, 255, 255),
             )
-
             screen.blit(
                 restart_text,
                 (
